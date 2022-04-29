@@ -1,5 +1,4 @@
 from sklearn.model_selection import GridSearchCV
-from tqdm import tqdm
 import numpy as np
 import read_csv as reader
 from data_preparation import DataPreparation
@@ -8,6 +7,7 @@ from sklearn.metrics import f1_score, balanced_accuracy_score
 from matplotlib import pyplot as plt
 import seaborn as sns
 from sklearn.tree import DecisionTreeClassifier
+import pandas as pd
 
 
 def iterate_files():
@@ -90,7 +90,7 @@ def run_decision_tree_model(model, grid_search=False):
             class_model = DTC(max_depth=best_params['max_depth'],
                               min_samples_split=best_params['min_samples_split'])
 
-        class_model.fit(prepared_data.x_train, np.ravel(prepared_data.y_train))
+        class_model.fit(prepared_data.x_train.values, np.ravel(prepared_data.y_train))
         y_prediction = class_model.predict(prepared_data.x_test)
         f1_scores.append([name.split('/')[1], evaluate_f1(y_prediction, prepared_data.y_test)])
         balanced_accuracy.append([name.split('/')[1], evaluate_balanced_accuracy(y_prediction, prepared_data.y_test)])
@@ -122,17 +122,30 @@ def evaluate_balanced_accuracy(y_test, y_pred):
 
 if __name__ == '__main__':
 
-    for i in tqdm(range(1)):
-        our_decision_tree = DTC(alpha=0.1)
-        decision_tree = DecisionTreeClassifier()
+    alphas = [0, 0.1, 0.3, 0.5, 1]
+    rounds = [30, 65, 100]
+    decision_tree = DecisionTreeClassifier()
+    modified_tree_f1_scores = []
+    modified_tree_balanced_accuracy_scores = []
 
-        # f1_scores, balanced_accuracy_scores = run_decision_tree_model(decision_tree, grid_search=True, alpha=0.1)
-        # print(f'\nDecision Tree F1 Score: {f1_scores}')
-        # print(f'\nDecision Tree Balances Accuracy Score: {balanced_accuracy_scores}')
+    f1_scores, balanced_accuracy_scores = run_decision_tree_model(decision_tree, grid_search=True)
+    print(f'\nRegular Decision Tree F1 Score: {f1_scores}')
+    print(f'Regular Decision Tree Balanced Accuracy Score: {balanced_accuracy_scores}')
 
-        f1_scores, balanced_accuracy_scores = run_decision_tree_model(our_decision_tree, grid_search=False)
-        print(f'\nOur Decision Tree F1 Score: {f1_scores}')
-        print(f'\nOur Decision Tree Balances Accuracy Score: {balanced_accuracy_scores}')
+    for alpha in alphas:
+        for iterations in rounds:
+            our_decision_tree = DTC(alpha=alpha, iterations=iterations)
 
-        # decision_tree_scores = run_decision_tree_model(grid_search=True)
-        # print(f'Decision Tree F1 Score With Hyper-Parameter Tuning: {decision_tree_scores}')
+            f1_scores, balanced_accuracy_scores = run_decision_tree_model(our_decision_tree, grid_search=True)
+            print(f'\nExecution Parameters: [alpha={alpha}, iterations={iterations}]')
+            print(f'\tModified Decision Tree F1 Score: {f1_scores}')
+            print(f'\tModified Decision Tree Balanced Accuracy Score: {balanced_accuracy_scores}')
+
+            modified_tree_f1_scores.append([alpha, iterations, f1_scores[0][1]])
+            modified_tree_balanced_accuracy_scores.append([alpha, iterations, balanced_accuracy_scores[0][1]])
+
+    f1_scores_df = pd.DataFrame(modified_tree_f1_scores, columns=['alpha', 'iterations', 'f1_score'])
+    balanced_accuracy_df = pd.DataFrame(modified_tree_balanced_accuracy_scores, columns=['alpha', 'iterations',
+                                                                                         'balanced_accuracy_score'])
+    f1_scores_df.to_csv('f1_scores.csv')
+    balanced_accuracy_df.to_csv('balanced_accuracy_scores.csv')

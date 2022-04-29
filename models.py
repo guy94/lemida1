@@ -1,5 +1,5 @@
 import copy
-
+import pandas as pd
 import numpy as np
 from sklearn.tree import DecisionTreeClassifier
 import random
@@ -7,41 +7,71 @@ import random
 
 class DTC(DecisionTreeClassifier):
 
-    def __init__(self, alpha, max_depth=None, min_samples_split=2):
+    def __init__(self, alpha, iterations, max_depth=None, min_samples_split=2):
         self.alpha = alpha
+        self.iterations = iterations
         super().__init__(max_depth=max_depth, min_samples_split=min_samples_split)
 
     def predict(self, X, check_input=True):
+        """
+        Overriding Sklearn predict method.
+        :param X:
+        :param check_input:
+        :return:
+        """
         ground_truth_thresh = copy.copy(self.tree_.threshold)
         preds = []
-        for index, row in X.iterrows():
-            row = row.array.reshape(1, -1)
-            row = self._validate_X_predict(row, check_input)
-            self.manipulate_thresholds(row, self.alpha)
-            proba = self.tree_.predict(row)
-            n_samples = row.shape[0]
+        results = pd.DataFrame()
 
-            # Classification
-            if self.n_outputs_ == 1:
-                pred_val = self.classes_.take(np.argmax(proba, axis=1), axis=0)
-                preds.append(pred_val[0])
+        for num in range(self.iterations):
+            for index, row in X.iterrows():
+                row = row.array.reshape(1, -1)
+                row = self._validate_X_predict(row, check_input)
+                self.manipulate_thresholds(row, self.alpha)
+                proba = self.tree_.predict(row)
+                n_samples = row.shape[0]
 
-                for i in range(len(self.tree_.threshold)):
-                    self.tree_.threshold[i] = ground_truth_thresh[i]
+                # Classification
+                if self.n_outputs_ == 1:
+                    pred_val = self.classes_.take(np.argmax(proba, axis=1), axis=0)
+                    preds.append(pred_val[0])
 
-            else:
-                class_type = self.classes_[0].dtype
-                predictions = np.zeros((n_samples, self.n_outputs_), dtype=class_type)
-                for k in range(self.n_outputs_):
-                    predictions[:, k] = self.classes_[k].take(
-                        np.argmax(proba[:, k], axis=1), axis=0
-                    )
+                    for i in range(len(self.tree_.threshold)):
+                        self.tree_.threshold[i] = ground_truth_thresh[i]
 
-                return predictions
+                else:
+                    class_type = self.classes_[0].dtype
+                    predictions = np.zeros((n_samples, self.n_outputs_), dtype=class_type)
+                    for k in range(self.n_outputs_):
+                        predictions[:, k] = self.classes_[k].take(
+                            np.argmax(proba[:, k], axis=1), axis=0
+                        )
 
-        return preds
+                    return predictions
+
+            results['round' + str(num)] = preds
+            preds = []
+
+        return self.calculate_avg(results)
+
+    def calculate_avg(self, results):
+        """
+        For n iterations, get the most common prediction for a sample.
+        :param results:
+        :return:
+        """
+
+        most_common_values = results.mode(axis=1)
+        return most_common_values.iloc[:, 0]
 
     def manipulate_thresholds(self, X, alpha):
+        """
+        Change node threshold with a certain proba (alpha).
+        :param X:
+        :param alpha:
+        :return:
+        """
+
         children_left = self.tree_.children_left
         children_right = self.tree_.children_right
         n_nodes = self.tree_.node_count
@@ -50,17 +80,12 @@ class DTC(DecisionTreeClassifier):
 
         node_depth = np.zeros(shape=n_nodes, dtype=np.int64)
         is_leaves = np.zeros(shape=n_nodes, dtype=bool)
-        stack = [(0, 0)]  # start with the root node id (0) and its depth (0)
+        stack = [(0, 0)]
         while len(stack) > 0:
-            # `pop` ensures each node is only visited once
             node_id, depth = stack.pop()
             node_depth[node_id] = depth
 
-            # If the left and right child of a node is not the same we have a split
-            # node
             is_split_node = children_left[node_id] != children_right[node_id]
-            # If a split node, append left and right children and depth to `stack`
-            # so we can loop through them
             if is_split_node:
                 stack.append((children_left[node_id], depth + 1))
                 stack.append((children_right[node_id], depth + 1))
@@ -70,11 +95,7 @@ class DTC(DecisionTreeClassifier):
 
                 if random_val <= alpha:
                     if threshold[node_id] <= X[:, feature_col]:
-                        try:
-                            threshold[node_id] = X[:, feature_col] + 1
-                        except:
-                            print(X[:, feature_col])
-                            print(X[:, feature_col] + 1)
+                        threshold[node_id] = X[:, feature_col] + 1
                     else:
                         threshold[node_id] = X[:, feature_col] - 1
             else:
