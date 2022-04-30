@@ -8,6 +8,7 @@ from matplotlib import pyplot as plt
 import seaborn as sns
 from sklearn.tree import DecisionTreeClassifier
 import pandas as pd
+from sklearn.model_selection import KFold, StratifiedKFold
 
 
 def iterate_files():
@@ -66,7 +67,7 @@ def print_best_params(best_params, name):
         print(f'{key}: {val}')
 
 
-def run_decision_tree_model(model, grid_search=False):
+def run_decision_tree_model(model, grid_search=False, is_modified=False):
     """
     run DecisionTreeClassifier model,
     consider whether to apply grid search with cross validation for hyper parameters tuning.
@@ -80,21 +81,34 @@ def run_decision_tree_model(model, grid_search=False):
     balanced_accuracy = []
 
     for name, prepared_data in total_data.items():
-        if grid_search:
-            params = {'max_depth': [5, 10, 12, 15, 20, 30, 50], 'min_samples_split': [2, 3, 5, 7]}
-            dtc_gs = GridSearchCV(class_model, params, cv=5).fit(prepared_data.x_train,
-                                                                       np.ravel(prepared_data.y_train))
+        #     if grid_search:
+        #         params = {'max_depth': [5, 10, 20, 50], 'min_samples_split': [2, 3, 5]}
+        #         dtc_gs = GridSearchCV(class_model, params, cv=5).fit(prepared_data.x_train,
+        #                                                                    np.ravel(prepared_data.y_train))
+        #         best_params = dtc_gs.best_params_
+        #
+        #         if is_modified:
+        #             class_model = DTC(class_model.alpha, class_model.iterations, max_depth=best_params['max_depth'],
+        #                           min_samples_split=best_params['min_samples_split'])
+        #         else:
+        #             class_model = DecisionTreeClassifier()
+        #
+        # class_model.fit(prepared_data.x_train.values, np.ravel(prepared_data.y_train))
+        # y_prediction = class_model.predict(prepared_data.x_test)
+        # f1_scores.append([name.split('/')[1], evaluate_f1(y_prediction, prepared_data.y_test)])
+        # balanced_accuracy.append([name.split('/')[1], evaluate_balanced_accuracy(y_prediction, prepared_data.y_test)])
 
-            best_params = dtc_gs.best_params_
-            print_best_params(best_params, name)
-            class_model = DTC(max_depth=best_params['max_depth'],
-                              min_samples_split=best_params['min_samples_split'])
+        for i in range(2):
+            kf = StratifiedKFold(n_splits=5)
+            for train_index, test_index in kf.split(prepared_data.x, prepared_data.y):
+                X_train, X_test, y_train, y_test = prepared_data.x.iloc[train_index], prepared_data.x.iloc[test_index], \
+                                                   prepared_data.y.iloc[train_index], prepared_data.y.iloc[test_index]
 
-        class_model.fit(prepared_data.x_train.values, np.ravel(prepared_data.y_train))
-        y_prediction = class_model.predict(prepared_data.x_test)
-        f1_scores.append([name.split('/')[1], evaluate_f1(y_prediction, prepared_data.y_test)])
-        balanced_accuracy.append([name.split('/')[1], evaluate_balanced_accuracy(y_prediction, prepared_data.y_test)])
-    return f1_scores, balanced_accuracy
+                class_model.fit(X_train.values, np.ravel(y_train))
+                y_prediction = class_model.predict(X_test)
+                f1_scores.append(evaluate_f1(y_prediction, y_test))
+                balanced_accuracy.append(evaluate_balanced_accuracy(y_prediction, y_test))
+    return round(np.average(f1_scores), 3), round(np.average(balanced_accuracy), 3)
 
 
 def evaluate_f1(y_test, y_pred):
@@ -106,7 +120,7 @@ def evaluate_f1(y_test, y_pred):
     :return:
     """
     score = f1_score(y_test, y_pred, average='weighted')
-    return round(score, 3)
+    return score
 
 
 def evaluate_balanced_accuracy(y_test, y_pred):
@@ -117,7 +131,7 @@ def evaluate_balanced_accuracy(y_test, y_pred):
     :return:
     """
     score = balanced_accuracy_score(y_test, y_pred)
-    return round(score, 3)
+    return score
 
 
 if __name__ == '__main__':
@@ -136,13 +150,14 @@ if __name__ == '__main__':
         for iterations in rounds:
             our_decision_tree = DTC(alpha=alpha, iterations=iterations)
 
-            f1_scores, balanced_accuracy_scores = run_decision_tree_model(our_decision_tree, grid_search=True)
+            f1_scores, balanced_accuracy_scores = run_decision_tree_model(our_decision_tree, grid_search=True,
+                                                                          is_modified=True)
             print(f'\nExecution Parameters: [alpha={alpha}, iterations={iterations}]')
             print(f'\tModified Decision Tree F1 Score: {f1_scores}')
             print(f'\tModified Decision Tree Balanced Accuracy Score: {balanced_accuracy_scores}')
 
-            modified_tree_f1_scores.append([alpha, iterations, f1_scores[0][1]])
-            modified_tree_balanced_accuracy_scores.append([alpha, iterations, balanced_accuracy_scores[0][1]])
+            modified_tree_f1_scores.append([alpha, iterations, f1_scores])
+            modified_tree_balanced_accuracy_scores.append([alpha, iterations, balanced_accuracy_scores])
 
     f1_scores_df = pd.DataFrame(modified_tree_f1_scores, columns=['alpha', 'iterations', 'f1_score'])
     balanced_accuracy_df = pd.DataFrame(modified_tree_balanced_accuracy_scores, columns=['alpha', 'iterations',
