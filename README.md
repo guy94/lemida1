@@ -3,8 +3,8 @@
 ## Abstract
 In the decision tree algorithm, samples are routed through the decision tree according to the results of the conditions at each of the splitting nodes. A prediction is then provided for each sample based on the leaf that the sample is routed to.
 A potential flaw with the decision tree algorithm is that the routing through the tree is binary. Hence, at each stage, one side of the tree is rendered irrelevant. The problem with this is that this method doesn’t account for the inherent uncertainty of the decision tree splits. Examples of situations that should generate uncertainty: 
-●	A sample is close to the decision boundary
-●	The split condition is based on a few training observations.
+* A sample is close to the decision boundary
+* The split condition is based on a few training observations.
 
 
 ## Task
