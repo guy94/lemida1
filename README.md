@@ -15,4 +15,4 @@ Train model without any modification. Before inference, for each sample, extract
 For each feature of the sample, manipulate the corresponding tree nodes and change the threshold value of that node so when the sample arrives to that node during inference it will be redirected to the oposite direction of the original one (with certain probability). For example:
 
 Given a tree node with the slected feature to split by - 'age' and all the samples that have age value smaller than 10 are redirected left. 
-Tested sample has 'age'=9 which means it will be directed left. In probability=0.1, change the value of the node (value=10) to be smaller than 9 so that same sample will be redirected right.
+Tested sample has 'age'=9 which means it will be directed left. With probability=0.1, change the value of the node (value=10) to be smaller than 9 so that same sample will be redirected right.
